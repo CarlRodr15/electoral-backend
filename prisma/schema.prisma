@@ -52,3 +52,11 @@ model Simpatizante {
   liderId          Int
   lider            Usuario  @relation(fields: [liderId], references: [id])
 }
+
+model Alerta {
+  id        Int      @id @default(autoincrement())
+  cedula    String
+  nombre    String
+  motivo    String
+  fecha     DateTime @default(now())
+}

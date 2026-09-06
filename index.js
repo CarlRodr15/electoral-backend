@@ -143,5 +143,28 @@ app.post('/api/login', async (req, res) => {
   } catch (error) { res.status(500).json({ error: 'Error en servidor' }); }
 });
 
+// --- RUTAS DE AUDITORÍA Y ALERTAS ---
+app.get('/api/alertas', async (req, res) => {
+  try {
+    const alertas = await prisma.alerta.findMany({ orderBy: { fecha: 'desc' } });
+    res.json(alertas);
+  } catch (error) { res.status(500).json({ error: "Error obteniendo alertas" }); }
+});
+
+app.post('/api/alertas', async (req, res) => {
+  try {
+    const { cedula, nombre, motivo } = req.body;
+    const alerta = await prisma.alerta.create({ data: { cedula, nombre, motivo } });
+    res.json(alerta);
+  } catch (error) { res.status(500).json({ error: "Error creando alerta" }); }
+});
+
+app.delete('/api/alertas', async (req, res) => {
+  try {
+    await prisma.alerta.deleteMany({});
+    res.json({ message: "Historial limpiado" });
+  } catch (error) { res.status(500).json({ error: "Error limpiando alertas" }); }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => { console.log(`✅ Servidor corriendo en http://localhost:${PORT}`); });
