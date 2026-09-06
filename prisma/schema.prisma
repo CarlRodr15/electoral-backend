@@ -1,4 +1,7 @@
-// --- CABECERA DE CONEXIÓN (¡No borrar!) ---
+/// -----------------------------------------------------------------------
+/// CONFIGURACIÓN DEL ENTORNO PRISMA ORM
+/// Base de datos: PostgreSQL (alojada en Supabase)
+/// -----------------------------------------------------------------------
 generator client {
   provider = "prisma-client-js"
 }
@@ -9,50 +12,72 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-// --- MODELOS DE DATOS ---
-
+/// -----------------------------------------------------------------------
+/// MODELO: Usuario
+/// @desc Gestiona los accesos al sistema y la estructura jerárquica de campaña.
+/// @roles ADMIN (Gerente), CONCEJAL (Candidato), LIDER (Reclutador territorial).
+/// -----------------------------------------------------------------------
 model Usuario {
   id             Int       @id @default(autoincrement())
   nombre         String
   cedula         String    @unique
   telefono       String?
-  rol            String    // Puede ser: 'ADMIN', 'CONCEJAL', 'LIDER'
-  contrasena     String
+  rol            String    /// Enum simulado: 'ADMIN', 'CONCEJAL', 'LIDER'
+  contrasena     String    /// Hash encriptado generado por bcryptjs
+  
+  /// Auditoría: Fecha en la que el usuario fue ingresado al sistema
+  fechaRegistro  DateTime  @default(now()) 
 
-  // --- JERARQUÍA: RELACIÓN CONCEJAL -> LÍDER ---
-  // Un líder pertenece a un concejal
+  // --- JERARQUÍA (Relación Reflexiva) ---
   concejalId     Int?
   concejal       Usuario?  @relation("EquipoConcejal", fields: [concejalId], references: [id])
-  
-  // Un concejal tiene un equipo de líderes
   equipoLideres  Usuario[] @relation("EquipoConcejal")
 
-  // Un líder tiene muchos simpatizantes
+  // --- RELACIONES EXTERNAS ---
   simpatizantes  Simpatizante[]
 }
 
+/// -----------------------------------------------------------------------
+/// MODELO: Simpatizante (Padrón Electoral)
+/// @desc Almacena el listado de votantes prospectados, su ubicación GPS 
+/// y su intención de voto para cruce de datos espaciales.
+/// -----------------------------------------------------------------------
 model Simpatizante {
   id              Int       @id @default(autoincrement())
   nombreCompleto  String
   cedula          String    @unique
   telefono        String?
-  zona            String
+  
+  // Ubicación Espacial y Territorial
+  zona            String    /// 'URBANA' o 'RURAL'
   barrioVereda    String
   direccion       String
-  latitud         Float?
-  longitud        Float?
+  latitud         Float?    /// Coordenada GPS Y
+  longitud        Float?    /// Coordenada GPS X
+
+  // Mapeo Político
   apoyaAlcaldia   Boolean   @default(false)
   apoyaConcejo    Boolean   @default(false)
+  
+  // Logística Electoral (Actualizables post-inscripción)
+  mesa            String?   /// Ej: "Mesa 4" 
+  observaciones   String?   /// Requerimientos logísticos (transporte, discapacidad)
+  
+  // Trazabilidad y Relaciones
   liderId         Int
   lider           Usuario   @relation(fields: [liderId], references: [id])
-  mesa            String?
-  observaciones   String?
+  fechaRegistro   DateTime  @default(now())
 }
 
+/// -----------------------------------------------------------------------
+/// MODELO: Alerta (Bitácora de Auditoría Global)
+/// @desc Registro de logs de seguridad y conflictos de sincronización
+/// (ej. intentos de cédulas duplicadas reportadas desde el frontend offline).
+/// -----------------------------------------------------------------------
 model Alerta {
   id        Int      @id @default(autoincrement())
-  cedula    String
-  nombre    String
-  motivo    String
-  fecha     DateTime @default(now())
+  cedula    String   /// Cédula conflictiva interceptada
+  nombre    String   /// Nombre asociado al intento fallido
+  motivo    String   /// Causa del error (Ej. "Duplicado en Sincronización Offline")
+  fecha     DateTime @default(now()) /// Timestamp del servidor al recibir el log
 }
