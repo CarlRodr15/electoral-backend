@@ -32,25 +32,21 @@ model Usuario {
 }
 
 model Simpatizante {
-  id               Int      @id @default(autoincrement())
-  nombreCompleto   String
-  cedula           String   @unique
-  telefono         String?
-  
-  // --- NUEVA SEGMENTACIÓN GEOGRÁFICA ---
-  zona             String   // 'URBANA' o 'RURAL'
-  barrioVereda     String   // Nombre específico del barrio o la vereda
-  direccion        String?  
-  latitud          Float?   
-  longitud         Float?   
-
-  // Conservamos la intención de voto general
-  apoyaAlcaldia    Boolean  @default(false)
-  apoyaConcejo     Boolean  @default(false)
-  
-  // Relación con el líder que lo registró
-  liderId          Int
-  lider            Usuario  @relation(fields: [liderId], references: [id])
+  id              Int       @id @default(autoincrement())
+  nombreCompleto  String
+  cedula          String    @unique
+  telefono        String?
+  zona            String
+  barrioVereda    String
+  direccion       String
+  latitud         Float?
+  longitud        Float?
+  apoyaAlcaldia   Boolean   @default(false)
+  apoyaConcejo    Boolean   @default(false)
+  liderId         Int
+  lider           Usuario   @relation(fields: [liderId], references: [id])
+  mesa            String?
+  observaciones   String?
 }
 
 model Alerta {

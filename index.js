@@ -125,6 +125,21 @@ app.delete('/api/usuarios/:id', async (req, res) => {
   } catch (error) { res.status(500).json({ error: 'Error al eliminar' }); }
 });
 
+// EDITAR SIMPATIZANTE (Mesa y Observaciones)
+app.put('/api/simpatizantes/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { mesa, observaciones } = req.body;
+    const simpatizante = await prisma.simpatizante.update({
+      where: { id: Number(id) },
+      data: { mesa, observaciones }
+    });
+    res.json(simpatizante);
+  } catch (error) {
+    res.status(500).json({ error: "Error al actualizar simpatizante" });
+  }
+});
+
 // --- LOGIN ---
 app.post('/api/login', async (req, res) => {
   try {
