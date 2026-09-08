@@ -3,34 +3,30 @@
  * @description Sistema de gestión territorial. Maneja la autenticación, base de datos espacial, 
  * jerarquías de campaña (Concejales/Líderes) y auditoría global.
  * @author Carlos Rodriguez - CIO Calima El Darién
- * @version 1.0.0
+ * @version 1.1.0
  */
 
 const express = require('express');
 const cors = require('cors');
+const compression = require('compression');
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs'); 
 const jwt = require('jsonwebtoken'); 
 
-// Inicialización de ORM y Framework
 const prisma = new PrismaClient();
 const app = express();
 
 // Middlewares Globales
-app.use(cors()); // Permite peticiones cruzadas desde el frontend en Vercel
-app.use(express.json()); // Parsea los cuerpos de las peticiones a formato JSON
+app.use(cors()); 
+app.use(express.json()); 
+app.use(compression());
 
-// TODO (Fase 2 SaaS): Pasar esta llave a variables de entorno (.env)
 const SECRET_KEY = process.env.JWT_SECRET || "secreto_super_seguro_calima"; 
 
 /* =========================================================================
    1. MÓDULO DE SIMPATIZANTES (PADRÓN ELECTORAL)
    ========================================================================= */
 
-/**
- * @route GET /api/simpatizantes
- * @desc Obtiene todos los simpatizantes registrados con la información de su líder y concejal.
- */
 app.get('/api/simpatizantes', async (req, res) => {
   try {
     const simpatizantes = await prisma.simpatizante.findMany({
@@ -43,18 +39,12 @@ app.get('/api/simpatizantes', async (req, res) => {
   }
 });
 
-/**
- * @route POST /api/simpatizantes
- * @desc Registra un nuevo simpatizante. Valida que la cédula no esté duplicada.
- */
 app.post('/api/simpatizantes', async (req, res) => {
   try {
-    // 1. Validación de duplicados
     const existe = await prisma.simpatizante.findFirst({ where: { cedula: req.body.cedula } });
     if (existe) {
       return res.status(400).json({ error: '¡ATENCIÓN! Esta cédula ya se encuentra registrada en el sistema.' });
     }
-    // 2. Creación
     const nuevoSimpatizante = await prisma.simpatizante.create({ data: req.body });
     res.status(201).json({ mensaje: '¡Simpatizante guardado!', datos: nuevoSimpatizante });
   } catch (error) { 
@@ -63,10 +53,6 @@ app.post('/api/simpatizantes', async (req, res) => {
   }
 });
 
-/**
- * @route DELETE /api/simpatizantes/:id
- * @desc Elimina un registro de simpatizante por su ID.
- */
 app.delete('/api/simpatizantes/:id', async (req, res) => {
   try {
     await prisma.simpatizante.delete({ where: { id: parseInt(req.params.id) } });
@@ -77,10 +63,6 @@ app.delete('/api/simpatizantes/:id', async (req, res) => {
   }
 });
 
-/**
- * @route PUT /api/simpatizantes/:id/transferir
- * @desc Reasigna un simpatizante a un nuevo líder (Transferencia de estructura).
- */
 app.put('/api/simpatizantes/:id/transferir', async (req, res) => {
   try {
     await prisma.simpatizante.update({
@@ -94,10 +76,6 @@ app.put('/api/simpatizantes/:id/transferir', async (req, res) => {
   }
 });
 
-/**
- * @route PUT /api/simpatizantes/:id
- * @desc Actualiza los campos opcionales del simpatizante (Mesa de votación y observaciones).
- */
 app.put('/api/simpatizantes/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -114,19 +92,14 @@ app.put('/api/simpatizantes/:id', async (req, res) => {
 });
 
 /* =========================================================================
-   2. MÓDULO DE USUARIOS Y JERARQUÍAS (ADMIN, CONCEJAL, LÍDER)
+   2. MÓDULO DE USUARIOS Y JERARQUÍAS
    ========================================================================= */
 
-/**
- * @route GET /api/usuarios
- * @desc Obtiene la estructura política (Líderes y Concejales). Filtra datos sensibles.
- */
 app.get('/api/usuarios', async (req, res) => {
   try {
     const usuarios = await prisma.usuario.findMany({
       include: { concejal: true, equipoLideres: true }
     });
-    // Limpieza de seguridad: Eliminamos el hash de la contraseña antes de enviar al frontend
     const usuariosSeguros = usuarios.map(u => { 
       const { contrasena, ...datosPublicos } = u; 
       return datosPublicos; 
@@ -138,26 +111,15 @@ app.get('/api/usuarios', async (req, res) => {
   }
 });
 
-/**
- * @route POST /api/usuarios
- * @desc Crea un nuevo miembro del equipo (Concejal o Líder) con contraseña encriptada.
- */
 app.post('/api/usuarios', async (req, res) => {
   try {
     const { nombre, cedula, telefono, rol, contrasena, concejalId } = req.body;
-    
-    // Encriptación de contraseña (Salt de 10 rondas)
     const salt = await bcrypt.genSalt(10);
     const contrasenaEncriptada = await bcrypt.hash(contrasena, salt);
 
     await prisma.usuario.create({
       data: { 
-        nombre, 
-        cedula, 
-        telefono, 
-        rol, 
-        contrasena: contrasenaEncriptada,
-        // Lógica relacional: Si es LIDER y pertenece a un CONCEJAL, guardamos el ID
+        nombre, cedula, telefono, rol, contrasena: contrasenaEncriptada,
         concejalId: rol === 'LIDER' && concejalId ? parseInt(concejalId) : null
       }
     });
@@ -168,16 +130,11 @@ app.post('/api/usuarios', async (req, res) => {
   }
 });
 
-/**
- * @route DELETE /api/usuarios/:id
- * @desc Despide a un usuario. Permite borrar sus datos en cascada o transferirlos al Admin.
- */
 app.delete('/api/usuarios/:id', async (req, res) => {
   try {
     const idUsuario = parseInt(req.params.id);
     const { accion, adminId } = req.body; 
 
-    // Flujo de protección de datos: Transferir o Borrar
     if (accion === 'transferir') {
       await prisma.simpatizante.updateMany({
         where: { liderId: idUsuario },
@@ -196,25 +153,18 @@ app.delete('/api/usuarios/:id', async (req, res) => {
 });
 
 /* =========================================================================
-   3. MÓDULO DE AUTENTICACIÓN Y SEGURIDAD
+   3. MÓDULO DE AUTENTICACIÓN
    ========================================================================= */
 
-/**
- * @route POST /api/login
- * @desc Autentica a un usuario y genera un JWT (JSON Web Token) para la sesión.
- */
 app.post('/api/login', async (req, res) => {
   try {
     const { cedula, contrasena } = req.body;
-    
     const usuario = await prisma.usuario.findUnique({ where: { cedula } });
     if (!usuario) return res.status(401).json({ error: 'Usuario no encontrado en la base de datos' });
 
-    // Verificación de Hash
     const contrasenaValida = await bcrypt.compare(contrasena, usuario.contrasena);
     if (!contrasenaValida) return res.status(401).json({ error: 'Contraseña incorrecta' });
 
-    // Generación de Token de Sesión (Expira en 8 horas de jornada laboral)
     const token = jwt.sign(
       { id: usuario.id, rol: usuario.rol, nombre: usuario.nombre }, 
       SECRET_KEY, 
@@ -233,13 +183,9 @@ app.post('/api/login', async (req, res) => {
 });
 
 /* =========================================================================
-   4. MÓDULO DE AUDITORÍA GLOBAL (LOGS)
+   4. MÓDULO DE AUDITORÍA GLOBAL
    ========================================================================= */
 
-/**
- * @route GET /api/alertas
- * @desc Obtiene el historial de conflictos (ej. intentos de cédulas duplicadas).
- */
 app.get('/api/alertas', async (req, res) => {
   try {
     const alertas = await prisma.alerta.findMany({ orderBy: { fecha: 'desc' } });
@@ -250,10 +196,6 @@ app.get('/api/alertas', async (req, res) => {
   }
 });
 
-/**
- * @route POST /api/alertas
- * @desc Registra un nuevo conflicto en la bitácora de auditoría.
- */
 app.post('/api/alertas', async (req, res) => {
   try {
     const { cedula, nombre, motivo } = req.body;
@@ -265,10 +207,6 @@ app.post('/api/alertas', async (req, res) => {
   }
 });
 
-/**
- * @route DELETE /api/alertas
- * @desc Limpia completamente la bitácora de auditoría (Solo para limpieza de mantenimiento).
- */
 app.delete('/api/alertas', async (req, res) => {
   try {
     await prisma.alerta.deleteMany({});
@@ -279,9 +217,6 @@ app.delete('/api/alertas', async (req, res) => {
   }
 });
 
-/* =========================================================================
-   INICIALIZACIÓN DEL SERVIDOR
-   ========================================================================= */
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => { 
   console.log(`✅ Servidor API Electora corriendo de forma segura en el puerto ${PORT}`); 
